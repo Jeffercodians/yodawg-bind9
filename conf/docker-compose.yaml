@@ -1,0 +1,13 @@
+services:
+  dns:
+    image: 'ubuntu/bind9:9.18-22.04_beta'
+    ports:
+      - "${SERVICE_PORT_DNS}:53/tcp"
+      - "${SERVICE_PORT_DNS}:53/udp"
+    volumes:
+      - "${SERVICE_ENV_CONF}/bind:/etc/bind"
+      - "${SERVICE_DATA}/bind:/data"
+    restart: always
+    environment:
+      TZ: "EST"
+      BIND9_USER: "root"

@@ -1,0 +1,173 @@
+#!/usr/bin/env bash
+
+set -ueo pipefail
+
+# @cmd
+up() {
+	generate_named
+	_docker_compose up -d
+}
+
+# @cmd
+down() {
+	_docker_compose down
+}
+
+# @cmd
+logs() {
+	_docker_compose logs
+}
+
+# @cmd
+reload() {
+	generate_named
+	rndc reload
+}
+
+# @cmd
+# @arg args~
+rndc() {
+	_docker_compose exec dns rndc "${argc_args[@]:-"${@}"}"
+}
+
+# @cmd
+list_zones() {
+	if [ -f "${SERVICE_CACHE}/zones" ]; then
+		cat "${SERVICE_CACHE}/zones"
+	fi
+}
+
+# @cmd
+# @arg	zone
+add_zone() {
+	local _zones_file="${SERVICE_CACHE}/zones"
+
+	if [ -f "${_zones_file}" ]; then
+		local _zones
+		_zones="$(cat "${_zones_file}")"
+
+		cat <<ZONES | xargs | sort | uniq > "${_zones_file}"
+${_zones}
+${argc_zone}
+ZONES
+	else
+		echo "${argc_zone}" > "${_zones_file}"
+	fi
+
+	[ -f "${SERVICE_DATA}/bind/${argc_zone}.db" ] || \
+		init_zone_db "${argc_zone}"
+}
+
+init_zone_db() {
+	local _zone_name="${1}"
+	local _db_file="${SERVICE_DATA}/bind/${_zone_name}.db"
+
+	cat <<DB > "${_db_file}"
+\$ttl 38400
+@	IN	SOA	ns.${_zone_name}. hostmaster.${_zone_name}. (
+				0	; serial number
+				12h	; refresh
+				15m	; update retry
+				3w	; expiry
+				2h	; minimum
+				)
+	IN	NS	ns.${_zone_name}.
+ns	IN	A	${SERVICES_IP}
+DB
+}
+
+# @cmd
+# @arg	zone
+remove_zone() {
+	if [ -f "${SERVICE_CACHE}/zones" ]; then
+		sed -i "/^${argc_zone}\$/d" "${SERVICE_CACHE}/zones"
+	fi
+	rm -f "${SERVICE_DATA}/bind/${argc_zone}.db"
+}
+
+# @cmd
+# @arg	zone
+list_records() {
+	local _zone_db="${SERVICE_DATA}/bind/${argc_zone}.db"
+
+	if [ -f "${_zone_db}" ]; then
+		tail -n +11 "${_zone_db}"
+	fi
+}
+
+# @cmd
+# @arg	zone
+# @arg	name
+# @arg	type
+# @arg	value
+add_record() {
+	if get_record; then return 1; fi
+
+	local _zone_db="${SERVICE_DATA}/bind/${argc_zone}.db"
+
+	echo "${argc_name}	IN	${argc_type}	${argc_value}" \
+		>> "${_zone_db}"
+
+	_increment_serial_number "${_zone_db}"
+}
+
+# @cmd
+# @arg zone
+# @arg name
+# @arg type
+get_record() {
+	local _zone_db="${SERVICE_DATA}/bind/${argc_zone}.db"
+	local _record
+
+	_record="$(grep "^${argc_name}	IN	${argc_type}" "${_zone_db}")" || \
+		return
+
+	awk -F$'\t' '{ print $4 }' <<< "${_record}"
+}
+
+# @cmd
+# @arg zone
+# @arg name
+# @arg type
+remove_record() {
+	get_record || return
+
+	local _zone_db="${SERVICE_DATA}/bind/${argc_zone}.db"
+
+	sed -i "/^${argc_name}	IN	${argc_type}/d" "${_zone_db}"
+
+	_increment_serial_number "${_zone_db}"
+}
+
+_increment_serial_number() {
+	local _zone_db="${1}"
+	local _serial_number _new_serial_number
+
+	_serial_number="$(grep "; serial number" "${_zone_db}" | \
+		sed -r 's/^\s+([0-9]+).*$/\1/')"
+	_new_serial_number=$(( _serial_number + 1 ))
+
+	echo "Incrementing ${_serial_number} to ${_new_serial_number}"
+
+	sed -i "s/${_serial_number}/${_new_serial_number}/" \
+		"${_zone_db}"
+}
+
+# @cmd
+generate_named() {
+	mkdir -p "${SERVICE_ENV_CONF}/bind"
+	cp "${SERVICE_CONF}/named.conf" "${SERVICE_CONF}/rndc.conf" \
+		"${SERVICE_ENV_CONF}/bind/"
+	[ -f "${SERVICE_ENV_CONF}/bind/rndc.key" ] || \
+		_docker_compose run dns rndc-confgen -a
+
+	readarray -t zones < <(list_zones)
+
+	for zone in "${zones[@]}"; do
+		export ZONE_NAME="${zone}"
+		envsubst < "${SERVICE_CONF}/zone_template.conf" \
+			>> "${SERVICE_ENV_CONF}/bind/named.conf"
+	done
+}
+
+eval "$(argc --argc-eval "${0}" "${@}")"

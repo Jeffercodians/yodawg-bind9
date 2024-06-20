@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+
+set -ueo pipefail
+
+# @cmd
+up() {
+	yo bind9 up
+}
+
+# @cmd
+reload() {
+	yo bind9 reload
+}
+
+# @cmd
+list_zones() {
+	yo bind9 list_zones
+}
+
+# @cmd
+# @arg	zone
+add_zone() {
+	yo bind9 add_zone "${argc_zone}"
+}
+
+# @cmd
+# @arg	zone
+remove_zone() {
+	yo bind9 remove_zone "${argc_zone}"
+}
+
+# @cmd
+# @arg	zone
+list_records() {
+	yo bind9 list_record "${argc_zone}"
+}
+
+# @cmd
+# @arg	zone
+# @arg	name
+# @arg	type
+# @arg	value
+add_record() {
+	yo bind9 add_record \
+		"${argc_zone}" "${argc_name}" "${argc_type}" "${argc_value}"
+}
+
+# @cmd
+# @arg zone
+# @arg name
+# @arg type
+get_record() {
+	yo bind9 get_record \
+		"${argc_zone}" "${argc_name}" "${argc_type}"
+}
+
+# @cmd
+# @arg zone
+# @arg name
+# @arg type
+remove_record() {
+	yo bind9 remove_record \
+		"${argc_zone}" "${argc_name}" "${argc_type}"
+}
+
+
+eval "$(argc --argc-eval "${0}" "${@}")"

@@ -6,11 +6,13 @@ set -ueo pipefail
 up() {
 	generate_named
 	_docker_compose up -d
+	_set_generic "dns" "${SERVICE_NAME}"
 }
 
 # @cmd
 down() {
 	_docker_compose down
+	_set_generic "dns"
 }
 
 # @cmd
@@ -46,7 +48,7 @@ add_zone() {
 		local _zones
 		_zones="$(cat "${_zones_file}")"
 
-		cat <<ZONES | xargs | sort | uniq > "${_zones_file}"
+		cat <<ZONES | xargs -L1 | sort | uniq > "${_zones_file}"
 ${_zones}
 ${argc_zone}
 ZONES
@@ -149,7 +151,7 @@ _increment_serial_number() {
 
 	echo "Incrementing ${_serial_number} to ${_new_serial_number}"
 
-	sed -i "s/${_serial_number}/${_new_serial_number}/" \
+	sed -i "0,/^ns/{s/\\s${_serial_number}\\s/	${_new_serial_number}	/}" \
 		"${_zone_db}"
 }
 

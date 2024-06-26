@@ -5,19 +5,19 @@ set -ueo pipefail
 # @cmd
 up() {
 	generate_named
-	_docker_compose up -d
+	docker_compose up -d
 	_set_generic "dns" "${SERVICE_NAME}"
 }
 
 # @cmd
 down() {
-	_docker_compose down
+	docker_compose down
 	_set_generic "dns"
 }
 
 # @cmd
 logs() {
-	_docker_compose logs
+	docker_compose logs
 }
 
 # @cmd
@@ -29,7 +29,7 @@ reload() {
 # @cmd
 # @arg args~
 rndc() {
-	_docker_compose exec dns rndc "${argc_args[@]:-"${@}"}"
+	docker_compose exec dns rndc "${argc_args[@]:-"${@}"}"
 }
 
 # @cmd
@@ -103,7 +103,7 @@ list_records() {
 # @arg	type
 # @arg	value
 add_record() {
-	if get_record; then return 1; fi
+	if get_record &>/dev/null; then return 1; fi
 
 	local _zone_db="${SERVICE_DATA}/bind/${argc_zone}.db"
 
@@ -149,8 +149,6 @@ _increment_serial_number() {
 		sed -r 's/^\s+([0-9]+).*$/\1/')"
 	_new_serial_number=$(( _serial_number + 1 ))
 
-	echo "Incrementing ${_serial_number} to ${_new_serial_number}"
-
 	sed -i "0,/^ns/{s/\\s${_serial_number}\\s/	${_new_serial_number}	/}" \
 		"${_zone_db}"
 }
@@ -161,7 +159,7 @@ generate_named() {
 	cp "${SERVICE_CONF}/named.conf" "${SERVICE_CONF}/rndc.conf" \
 		"${SERVICE_ENV_CONF}/bind/"
 	[ -f "${SERVICE_ENV_CONF}/bind/rndc.key" ] || \
-		_docker_compose run dns rndc-confgen -a
+		docker_compose run dns rndc-confgen -a
 
 	readarray -t zones < <(list_zones)
 

@@ -2,22 +2,25 @@
 
 set -ueo pipefail
 
+include "<docker>"
+include "<generic>"
+
 # @cmd
 up() {
 	generate_named
-	docker_compose up -d
-	_set_generic "dns" "${SERVICE_NAME}"
+	docker::compose up -d
+	generic::set "dns" "${SERVICE_NAME}"
 }
 
 # @cmd
 down() {
-	docker_compose down
-	_set_generic "dns"
+	docker::compose down
+	generic::set "dns"
 }
 
 # @cmd
 logs() {
-	docker_compose logs
+	docker::compose logs
 }
 
 # @cmd
@@ -29,7 +32,7 @@ reload() {
 # @cmd
 # @arg args~
 rndc() {
-	docker_compose exec dns rndc "${argc_args[@]:-"${@}"}"
+	docker::compose exec dns rndc "${argc_args[@]:-"${@}"}"
 }
 
 # @cmd
@@ -159,7 +162,7 @@ generate_named() {
 	cp "${SERVICE_CONF}/named.conf" "${SERVICE_CONF}/rndc.conf" \
 		"${SERVICE_ENV_CONF}/bind/"
 	[ -f "${SERVICE_ENV_CONF}/bind/rndc.key" ] || \
-		docker_compose run dns rndc-confgen -a
+		docker::compose run dns rndc-confgen -a
 
 	readarray -t zones < <(list_zones)
 
